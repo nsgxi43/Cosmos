@@ -56,12 +56,24 @@ For the current demo, the Journal and Polaris AI features are configured for a s
 
 ---
 
+## Frontend File Structure
+
+The Flutter application is organized into several key files, each managing a distinct part of the user experience.
+
+- `main.dart` - Home dashboard with an animated starry background and task management. **(Task Management Under Progress)**
+- `ai_page.dart` - Voice/video chat interface with the Polaris AI companion.
+- `ai_client.dart` - WebSocket client handling real-time AI communication.
+- `journal_page.dart` - Journaling interface with a glassmorphism design.
+- `login.dart` - Multi-step onboarding flow with session management. **(Only UI Implemented)**
+
+---
+
 ## Backend API Endpoints
 
 The backend exposes the following endpoints for the frontend to consume.
 
 ### WebSocket
-- `WS /process` - Real-time AI conversation with multimodal input processing(audio+video emotions)
+- `WS /process` - Real-time AI conversation with multimodal input processing.
 
 ### REST API
 
