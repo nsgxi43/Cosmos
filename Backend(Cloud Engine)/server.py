@@ -35,8 +35,11 @@ SCOPES = [
     "https://www.googleapis.com/auth/cloud-platform",
     "https://www.googleapis.com/auth/generative-language"
 ]
-GEMINI_FLASH_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-GEMINI_PRO_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
+
+# Updated Gemini 2.5 model URLs
+GEMINI_FLASH_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+GEMINI_PRO_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent"
+GEMINI_FLASH_LITE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
 
 # Perspective API
 PERSPECTIVE_API_KEY = "<YOUR-API-KEY>"
@@ -233,28 +236,20 @@ async def run_audio_emotion(pcm_data: bytes) -> dict:
 def query_gemini_text(input_json: dict, conversation_history: str) -> str:
     audio_emotion = input_json.get("audio_emotion", "")
     video_emotion = input_json.get("video_emotion", "")
-    if audio_emotion: 
-        audio_emotion = audio_emotion.split('/')[-1].strip()
-    if video_emotion: 
-        video_emotion = video_emotion.split('/')[-1].strip()
-    
-    history_context = ""
-    if conversation_history:
-        history_context = f"""
-RECENT CONVERSATION CONTEXT:
-{conversation_history}
+    if audio_emotion: audio_emotion = audio_emotion.split('/')[-1].strip()
+    if video_emotion: video_emotion = video_emotion.split('/')[-1].strip()
 
-"""
+    history_context = f"\nRECENT CONVERSATION CONTEXT:\n{conversation_history}\n\n" if conversation_history else ""
 
     prompt_text = f"""You are Polaris, an empathetic conversational agent and wellness companion. You blend the qualities of a therapist and close friend.
 
 {history_context}CORE GUIDELINES:
 - Always prioritize the emotion expressed in the text
 - Be warm, understanding, and naturally conversational
-- Intelligently decide when conversation history is relevant to the current question - use it when it helps provide better context, ignore it when it doesn't relate to the current input
-- If video and audio emotions differ from text, blend them subtly without mentioning the mismatch
-- Adjust response length proportionally to user input - keep it short for basic questions and expand only when the topic truly demands more comprehensive coverage
-- Paraphrase rather than repeat the user's exact words
+- Intelligently decide when conversation history is relevant to the current question
+- Blend video/audio emotions subtly
+- Adjust response length proportionally
+- Paraphrase rather than repeat
 - No emojis
 
 CURRENT INPUT ANALYSIS:
@@ -266,31 +261,55 @@ Respond naturally as Polaris, keeping your response conversational and supportiv
 
     payload = {
         "contents": [{"parts": [{"text": prompt_text}]}],
-        "generationConfig": {"temperature": 0.8, "maxOutputTokens": 4000},
+        "generationConfig": {
+            "temperature": 0.8, 
+            "maxOutputTokens": 4000,
+            "topP": 0.95,
+            "topK": 40
+        },
     }
-    
+
+    # Updated model priority: Flash → Pro → Flash Lite
     models_to_try = [
-        {"name": "Gemini 1.5 Flash", "url": GEMINI_FLASH_URL},
-        {"name": "Gemini 1.5 Pro", "url": GEMINI_PRO_URL}
+        {"name": "Gemini 2.5 Flash", "url": GEMINI_FLASH_URL},
+        {"name": "Gemini 2.5 Pro", "url": GEMINI_PRO_URL},
+        {"name": "Gemini 2.5 Flash Lite", "url": GEMINI_FLASH_LITE_URL}
     ]
     max_retries = 3
     base_delay = 1
-    
+
     for model in models_to_try:
         for i in range(max_retries):
             try:
+                print(f"🛰️ Attempt {i+1} for model {model['name']}")
+                print(f"📦 Payload size: {len(json.dumps(payload))} chars")
                 resp = authed_session.post(model['url'], json=payload, timeout=120)
+                print(f"🌐 Status code: {resp.status_code}")
+                
                 if resp.status_code >= 500:
+                    print(f"⚠️ Server error {resp.status_code}, retrying...")
                     time.sleep(base_delay * (2**i))
                     continue
+                
+                if resp.status_code == 404:
+                    print(f"❌ Model {model['name']} not found (404), trying next model...")
+                    break  # Skip to next model
+                
                 resp.raise_for_status()
                 resj = resp.json()
+                print(f"✅ Response received from {model['name']}: {json.dumps(resj)[:500]}...")
                 return resj["candidates"][0]["content"]["parts"][0]["text"].strip()
+                
             except Exception as e:
-                if i < max_retries - 1:
+                print(f"❌ {model['name']} API attempt {i+1} failed: {e}")
+                if hasattr(resp, 'text'):
+                    print(f"📝 Response text: {resp.text[:500]}...")
+                if i < max_retries - 1: 
                     time.sleep(base_delay * (2**i))
-    
-    return "I'm sorry, I'm facing some technical difficulties connecting to my brain right now. Please try again in a moment."
+
+    print("⚠️ All Gemini API attempts failed, returning fallback message.")
+    return "I'm sorry, I'm facing some technical difficulties connecting to my brain right now."
+
 
 def query_google_tts(text: str) -> bytes:
     if not text.strip(): 
@@ -386,7 +405,7 @@ def check_toxicity(text: str) -> float:
         return 0.0
 
 def generate_one_suggestion(convo_context: str) -> str:
-    """Generate a suggestion using Gemini API."""
+    """Generate a suggestion using Gemini 2.5 API."""
     if not authed_session:
         return "Take a moment to reflect on what's bringing you joy today."
 
@@ -406,15 +425,36 @@ Write a journal prompt based on the above context. Start with "Write about" or "
             "stopSequences": ["\n", ".", "!", "?"]
         }
     }
-    try:
-        resp = authed_session.post(GEMINI_FLASH_URL, json=payload)
-        resp.raise_for_status()
-        result = resp.json()
-        content = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "Take a moment to reflect on what's bringing you joy today.")
-        return content.strip()
-    except Exception as e:
-        print(f"Gemini API call failed: {e}")
-        return "Take a moment to reflect on what's bringing you joy today."
+    
+    # Try models in order: Flash → Pro → Flash Lite
+    models_to_try = [
+        {"name": "Gemini 2.5 Flash", "url": GEMINI_FLASH_URL},
+        {"name": "Gemini 2.5 Pro", "url": GEMINI_PRO_URL},
+        {"name": "Gemini 2.5 Flash Lite", "url": GEMINI_FLASH_LITE_URL}
+    ]
+    
+    for model in models_to_try:
+        try:
+            resp = authed_session.post(model['url'], json=payload, timeout=60)
+            
+            if resp.status_code == 404:
+                print(f"⚠️ {model['name']} not available, trying next model...")
+                continue
+            
+            resp.raise_for_status()
+            result = resp.json()
+            content = result.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+            
+            if content:
+                print(f"✅ Suggestion generated using {model['name']}")
+                return content.strip()
+                
+        except Exception as e:
+            print(f"❌ {model['name']} API call failed: {e}")
+            continue
+    
+    # Fallback if all models fail
+    return "Take a moment to reflect on what's bringing you joy today."
 
 # --- ROUTES ---
 
@@ -586,7 +626,7 @@ def get_public_journals():
         # Log the first journal for debugging
         if public_journals:
             first_journal = public_journals[0]
-            print(f" First journal sample: {first_journal}")
+            print(f"✨ First journal sample: {first_journal}")
             
         return {"success": True, "journals": public_journals}
         
