@@ -1,5 +1,17 @@
 # Cosmos Wellness
 
+## ⚠️ Note on Gemini 1.5 Models
+
+**Date:** Oct 5th  
+
+Google removed support for Gemini 1.5 models (Flash & Pro) in Vertex AI. This caused Polaris AI to fail generating responses between **Sep 24 – Oct 4**.  
+
+All other app functionality worked fine. We updated the code on **Oct 5** to use supported models.  
+
+We apologize for any inconvenience.  
+[Migration details](https://cloud.google.com/vertex-ai/generative-ai/docs/migrate)
+
+
 **Live Demo:** [https://cosmos-wellness.vercel.app](https://cosmos-wellness.vercel.app)
 
 ---
