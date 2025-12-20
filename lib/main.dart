@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:horizontal_week_calendar/horizontal_week_calendar.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:math';
 import 'ai_page.dart';
@@ -6,6 +7,7 @@ import 'login.dart'; // make sure this file exists
 import 'journal_page.dart';
 import 'dart:ui';
 import 'community.dart'; // Correctly import your community_page code
+import 'Cal_page.dart';
 
 void main() {
   runApp(const CosmosApp());
@@ -42,6 +44,10 @@ class _HomePageState extends State<HomePage>
 
   int pendingCount = 5;
   int finishedCount = 0;
+
+  bool _isSameDay(DateTime a, DateTime b) {
+  return a.year == b.year && a.month == b.month && a.day == b.day;
+}
 
   final List<String> tasks = [
     "Finish project report",
@@ -127,10 +133,19 @@ class _HomePageState extends State<HomePage>
                   child: WeekCalendar(
                     selectedDate: selectedDate,
                     onDateChange: (date) {
-                      setState(() {
-                        selectedDate = date;
-                      });
-                    },
+  if (_isSameDay(date, DateTime.now())) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => MonthlyMoodPage(initialMonth: date),
+      ),
+    );
+  } else {
+    setState(() {
+      selectedDate = date;
+    });
+  }
+},
                   ),
                 ),
 
@@ -291,7 +306,6 @@ class _HomePageState extends State<HomePage>
         ],
       ),
 
-      // Bottom Navigation Bar
       // Bottom Navigation Bar
 bottomNavigationBar: BottomNavigationBar(
   backgroundColor: Colors.black,
@@ -553,3 +567,8 @@ class StarPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }
+
+
+
+
+
